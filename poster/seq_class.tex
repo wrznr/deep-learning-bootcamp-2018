@@ -1,0 +1,156 @@
+\documentclass[hlcolor=000000,logo=logo.pdf]{modernposter}
+
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage{tipa}
+\usepackage[english]{babel}
+
+
+\title{Modelling sublexical analysis as sequence classification}
+\author{Kay-Michael Würzner}
+\email{wuerzner@bbaw.de}
+
+\definecolor{mDarkTeal}{HTML}{c60c30}
+\definecolor{mDarkBrown}{HTML}{604c38}
+
+\begin{document}
+
+  \maketitle
+
+  \begin{postercolumn}
+    \posterbox[40cm]{Introduction}{
+      Words are not simply strings of characters. They bear an \textbf{internal structure}
+      on multiple (partially hierarchically ordered) levels:
+      \begin{description}
+        \item[Morphology] Refers to the grammatical structure of words. Elements of the structural description are called \emph{morphemes}.
+        \item[Syllabification] Refers to the phonological structure of words. Elements of the structural description are called \emph{syllables}.
+        \item[Phonology] Refers to the phonological structure of syllables. Elements of the structural description are called \emph{phonemes}.
+      \end{description}
+      \textbf{Automatic analyses} of particular words with respect to each of these levels are classical \emph{natural language processing} (NLP)
+      tasks. Existing approaches can be roughly divided into two types:
+      \begin{enumerate}
+        \item systems using \textbf{manually constructed rules} and
+        \item systems based on some \textbf{statistical model} automatically induced from training data.
+      \end{enumerate}
+      With the increasing availability of manually annotated data (e.g. in
+      professional lexical databases such as \emph{CELEX} or community-driven projects such as \emph{wiktionary}), the latter have become the
+      main focus of NLP research. However, rule-based systems still outperform statistical approaches in terms of correctness.
+    }
+    \posterbox[36cm]{Inter-level dependencies}{ 
+      The different levels of sublexical representation are not independent of each other:\par
+      \begin{tabular}{ll@{\hspace{1cm}}l}
+        \textbf{Word} & \emph{verifizieren} & \emph{verirren} \\
+        \textbf{Morphology}$^1$ & \texttt{ver \textasciitilde{} ifizier \textasciitilde{} en} & \texttt{ver + irr \textasciitilde{} en}\\
+        \textbf{Syllabification}$^2$ & \texttt{ve-ri-fi-zie-ren} & \texttt{ver-ir-ren} \\
+        \textbf{Phonology}$^3$ & \textipa{\rmfamily ""ve\;Rifi"\texttslig i:\;R@n} & \textipa{\rmfamily fE\textsubarch{5}"?IK@n} \\
+      \end{tabular}\\
+      \begin{small}
+        \begin{tabular}{ll}
+        $^{1)}$ & \textasciitilde{} denotes a following suffix, \texttt{+} denotes a preceding prefix.\\
+        $^{2)}$ & \texttt{-} denotes a syllable boundary.\\
+        $^{3)}$ & The phonological representation is denoted using the International Phonetic Alphabet.
+        \end{tabular}
+      \end{small}\\[2ex]
+      This German example illustrates, e.g., the \textbf{dependency of the syllable structure on the morphological structure}: German syllables
+      are usually distributed following the \emph{maximum onset principle}, effectively assigning the first \texttt{r} in \emph{verifizieren}
+      to the second syllable. However, this principle is violated in \emph{verirren} due to the \emph{stronger} rule that each prefix boundary
+      co-occurs with a syllable boundary.\par
+      Comparing the phonological representations, shows that \textbf{the syllable structure in turn influences the pronunciations}: For example,
+      the initial glottal stop in the second syllable of \emph{verirren} is a consequence of the missing (overt) onset of that syllable.
+    }
+    \posterbox[24cm]{\highlight{Expectations}}{
+      Both \cite{wj2015dsolve} and \cite{wj2015gramophone} use \emph{Conditional Random Fields} as the underlying type of statistical model.
+      Their results are promising but far from optimal.
+      \begin{description}
+        \item[Expectation 1:]~Acquire the necessary knowledge to implement sequence classification for sublexical analysis with the methods
+                              of deep learning.
+      \end{description}
+      By now, there is no (statistical) approach who respects the dependencies between the different levels of sublexical word structuring.
+      \begin{description}
+        \item[Expectation 2:]~Investigate whether recurring neural networks might be an option to model these dependencies.
+      \end{description}
+    }
+  \end{postercolumn} 
+  \begin{postercolumn}
+    \posterbox[20.5cm]{Sequence classification}{
+      Sublexical analysis may be treated as an instance of the \textbf{sequence classification problem}. I.e., given
+      \begin{itemize}
+        \item a set of symbols $O$ and
+        \item a set of classes $C$,
+      \end{itemize}
+      \textbf{each symbol} $o_i \in O$ in an observation string $o = o_1 \ldots o_n$ \textbf{is mapped onto a class} $c_i \in C$ by determining the
+      most probable string of classes $c = c_1 \ldots c_n$ associated with $o$ by an underlying stochastic model.
+    }
+    \posterbox[22.5cm]{Morphological analysis}{
+      For the task of morphological analysis, $O$ is defined to be the surface character alphabet itself. Following \cite{wj2015dsolve},
+      the set of target classes is a ``type-sensitive classification scheme'' (e.g. $C = \{+,\#,\sim,0\}$, where `$+$' indicates that
+      a prefix morpheme ends at the current position, `$\#$' indicates that a free morpheme starts with the following position, `$\sim$'
+      indicates that a suffix morph starts with the following position, and $0$ indicates that there is no morpheme boundary after the
+      current position).
+      \begin{center}
+        \begin{tabular}{ccccccccccccc}
+          G & e & f & o & l & g & s & l & e & u & t & e & n
+          \\
+          %0 & 1 & 0 & 0 & 0 & 1 & 1 & 0 & 0 & 0 & 0 & 1 & 0
+          % \multicolumn{13}{c}{(a)}
+          %\\
+          0 & + & 0 & 0 & 0 & \textasciitilde & \# & 0 & 0 & 0 & 0 & \textasciitilde & 0 \\
+          % \multicolumn{13}{c}{(b)}
+        \end{tabular}
+      \end{center}
+    }
+    \posterbox[18cm]{Syllabification}{
+      For the task of syllabification, $O$ is again defined to be the surface character alphabet itself. The set of target classes
+      is binary (e.g. $C=\{0,1\}$), leading to a classifier which predicts for every position $i$ whether or not there is a
+      syllable boundary following (rsp. preceding) the observed symbol at position $i$ of the input word.
+      \begin{center}
+        \begin{tabular}{ccccccccccccc}
+          G & e & f & o & l & g & s & l & e & u & t & e & n
+          \\
+          0 & 1 & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 1 & 0 & 0 & 0
+          % \multicolumn{13}{c}{(a)}
+          %\\
+          %0 & + & 0 & 0 & 0 & \textasciitilde & \# & 0 & 0 & 0 & 0 & \textasciitilde & 0 \\
+          % \multicolumn{13}{c}{(b)}
+        \end{tabular}
+      \end{center}
+    }
+    \posterbox[23.7cm]{Grapheme-Phoneme conversion}{
+      In contrast to the aforementioned tasks, the grapheme-phoneme correspondence can not be (straightforwardly) modelled as a $1:n$
+      mapping. In \cite{wj2015gramophone}, a constrained-based alignment is proposed to deal with
+      that problem: a grapheme alphabet $\Sigma_G$, a phoneme alphabet $\Sigma_P$, and a finite set $M \subset (\Sigma^+_G \times
+     \Sigma^+_P)$ relating grapheme substrings and their potential phonemic realizations are used to generate $o$ and $c$.
+      \begin{center}\normalsize
+        \begin{tabular}{crcl}
+          (a) & $M$ & $=$ &%
+          \begin{minipage}[c]{0.5\textwidth}%
+                \[%
+                \left \{
+                \begin{tabular}{ccccc}
+                 p : \textipa{/p/}, & h : \textipa{/h/}, & ph : \textipa{/f/}, & ö : \textipa{/\o:/}, & ö : \textipa{/\oe/}\\
+                 n : \textipa{/n/}, & i : \textipa{/I/}, & k : \textipa{/k/}, & s : \textipa{/s/}, & x : \textipa{/ks/}
+                \end{tabular}
+                \right \}
+                \]%
+          \end{minipage}%
+        \\[4ex]%
+        (b) & Grapheme Segmentations & $=$%
+          & $\{$ p|h|ö|n|i|x|,\enskip ph|ö|n|i|x| $\}$%
+         \\[2ex]%
+        (c) & Phoneme Segmentations & $=$%
+          & $\{$ \textipa{f\_\o:\_n\_I\_ks\_},\enskip \textipa{f\_\o:\_n\_I\_k\_s\_} $\}$%
+         \\%
+        (d) & Alignment & $=$
+          & $\{$ ph|ö|n|i|x| : \textipa{f\_\o:\_n\_I\_ks\_} $\}$\\
+      \end{tabular}
+    \end{center}
+    }
+    \posterbox[12.7cm]{References}{\normalsize
+      \renewcommand{\section}[2]{}%
+      \vspace*{-0.8cm}
+      \bibliographystyle{abbrv}
+      \bibliography{seq_class}
+    }
+  \end{postercolumn}
+
+\end{document}
