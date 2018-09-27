@@ -1,0 +1,10 @@
+matplotlib
+pandas
+h5py
+pyyaml
+keras
+tensorflow
+numpy
+scikit-image
+scikit-learn
+progressbar
