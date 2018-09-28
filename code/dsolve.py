@@ -14,17 +14,6 @@ from keras.preprocessing.sequence import pad_sequences
 from keras.optimizers import Adam
 from keras import backend as K
 
-
-def to_categorical(sequences, categories):
-    cat_sequences = []
-    for s in sequences:
-        cats = []
-        for item in s:
-            cats.append(np.zeros(categories))
-            cats[-1][item] = 1.0
-        cat_sequences.append(cats)
-    return np.array(cat_sequences)
-
 def logits_to_tokens(sequences, index):
     token_sequences = []
     for categorical_sequence in sequences:
@@ -101,19 +90,15 @@ words_val = [list(map(lambda x: i_c[x], w)) for w in x_test]
 labels_val = [list(map(lambda x: i_l[x], y)) for y in y_test]
 
 #
-# model
-#inputs = Input(shape=(len(c_i),))
-#embedd = Embedding(len(c_i),32)(inputs)
-#outputs = TimeDistributed(Dense(len(l_i), activation='softmax'))(embedd)
-#model = Model(inputs,outputs)
-
+# model 1: padding
 
 model = Sequential()
-model.add(InputLayer(input_shape=(max_i-1, )))
-model.add(Embedding(len(c_i)+1, 16))
-model.add(Bidirectional(LSTM(64, return_sequences=True)))
-model.add(TimeDistributed(Dense(len(l_i))))
-model.add(Activation('softmax'))
+model.add(Embedding(len(c_i)+1, 32))
+model.add(Convolution1D(16,5,padding='same', activation='relu'))
+model.add(Dropout(0.25))
+model.add(GRU(32, return_sequences=True))
+#model.add(Bidirectional(GRU(64, return_sequences=True)))
+model.add(TimeDistributed(Dense(len(l_i), activation='softmax')))
  
 model.compile(loss='categorical_crossentropy',
               optimizer=Adam(0.001),
@@ -121,43 +106,76 @@ model.compile(loss='categorical_crossentropy',
 
 print(model.summary())
 
-x_train_padded = pad_sequences(x_train,value=len(c_i)-1,maxlen=max_i-1)
-y_train_padded = pad_sequences(y_train,value=len(l_i)-1,maxlen=max_i-1)
-y_train_padded_cat = to_categorical(y_train_padded,len(l_i))
+x_train_padded = pad_sequences(x_train,value=len(c_i),maxlen=max_i-1,padding='post')
+y_train_padded = pad_sequences(y_train,value=len(l_i)-1,maxlen=max_i-1,padding='post')
+y_train_padded_cat = []
+for padded_seq in y_train_padded:
+    y_train_padded_cat.append(np_utils.to_categorical(padded_seq,len(l_i))
+y_train_padded_cat = np.array(y_train_padded_cat)
 
-x_test_padded = pad_sequences(x_test,value=len(c_i)-1,maxlen=max_i-1)
-y_test_padded = pad_sequences(y_test,value=len(l_i)-1,maxlen=max_i-1)
-y_test_padded_cat = to_categorical(y_test_padded,len(l_i))
+x_test_padded = pad_sequences(x_test,value=len(c_i),maxlen=max_i-1,padding='post')
+y_test_padded = pad_sequences(y_test,value=len(l_i)-1,maxlen=max_i-1,padding='post')
 
-x_val_padded = pad_sequences(x_test[20:30],value=len(c_i)-1,maxlen=max_i-1)
-y_val_padded = pad_sequences(y_test[20:30],value=len(l_i)-1,maxlen=max_i-1)
-y_val_padded_cat = to_categorical(y_val_padded,len(l_i))
+y_test_padded_cat = []
+for padded_seq in y_test_padded:
+    y_test_padded_cat.append(np_utils.to_categorical(padded_seq,len(l_i))
+y_test_padded_cat = np.array(y_test_padded_cat)
 
-model.fit(x_train_padded,y_train_padded_cat,batch_size=50,epochs=20,shuffle=True,validation_data=(x_test_padded, y_test_padded_cat))
+model.fit(x_train_padded,y_train_padded_cat,batch_size=128,epochs=1,shuffle=True,validation_data=(x_test_padded, y_test_padded_cat))
 
 
-testword = "".join(i_c[x] for x in x_test[10])
-print(testword)
+correct = 0
+bar = progressbar.ProgressBar(maxval=len(x_test_padded))
+for i,_ in bar(enumerate(x_test_padded)):
+    annotation = "".join(i_l[x] for x in y_test[i])
+    pred = model.predict_on_batch(x_test_padded[i:i+1])
+    pred = logits_to_tokens(pred,i_l)
 
-pred = model.predict(x_val_padded)
-print(pred.shape)
-pred = logits_to_tokens(pred,i_l)
-for i in range(0,len(pred)):
-    gt = "".join(i_c[x] for x in encoded_words[20+i])
-    pr = "".join(x for x in pred[i][-len(gt):])
-    print("%s\n%s" % (gt,pr))
-
-sys.exit(0)
-
-for n_batch, encoded_word in bar(enumerate(x_test)):
-    annotation = y_test[n_batch]
-    # View each sentence as a batch
-    encoded_word = np.array([encoded_word])
-    
-    pred = model.predict_on_batch(encoded_word)
-    pred = np.argmax(pred,-1)[0]
-    labels_pred_val.append(pred)
-    if pred.tolist() == annotation:
-        out = "".join(i_c[x] for x in encoded_word[0].tolist())
+    gt = "".join(i_c[x] for x in encoded_words[i])
+    pr = "".join(x for x in pred[0][0:len(gt)])
+    if pr == annotation:
         correct += 1
 print(correct*100/len(x_test))
+
+#
+# model 2: train on batch
+
+model2 = Sequential()
+model2.add(Embedding(len(c_i)+1, 32))
+model2.add(Convolution1D(16,5,padding='same', activation='relu'))
+model2.add(Dropout(0.25))
+model2.add(GRU(32, return_sequences=True))
+#model2.add(Bidirectional(GRU(64, return_sequences=True)))
+model2.add(TimeDistributed(Dense(len(l_i), activation='softmax')))
+ 
+model2.compile(loss='categorical_crossentropy',
+              optimizer=Adam(0.001),
+             metrics=['accuracy', ignore_class_accuracy(5)])
+
+print(model2.summary())
+
+n_epochs = 1
+for i in range(n_epochs):
+    print("Training epoch {}".format(i))
+    
+    bar = progressbar.ProgressBar(maxval=len(x_train))
+    for n_batch, encoded_word in bar(enumerate(x_train)):
+        annotation = np.array(y_train[n_batch])
+        # Make annotation one hot
+        annotation = np_utils.to_categorical([annotation],len(l_i))
+        # View each sentence as a batch
+        encoded_word = np.array(encoded_word)[np.newaxis,:]
+        model2.train_on_batch(encoded_word, annotation)
+
+    bar = progressbar.ProgressBar(maxval=len(x_test))
+    correct = 0
+    for n_batch, encoded_word in bar(enumerate(x_test)):
+        annotation = y_test[n_batch]
+        # View each word as a batch
+        encoded_word = np.array(encoded_word)[np.newaxis,:]
+        
+        pred = model2.predict_on_batch(encoded_word)
+        pred = np.argmax(pred,-1)[0]
+        if pred.tolist() == annotation:
+            correct += 1
+    print(correct*100/len(x_test))
